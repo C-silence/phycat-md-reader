@@ -11,7 +11,8 @@
 
 | 入口 | 说明 |
 |---|---|
-| **下载 APK** | [⬇ phycat-md-reader-v0.1-debug.apk](./downloads/phycat-md-reader-v0.1-debug.apk)（约 31MB，Android 7.0+，需允许"未知来源"） |
+| **下载 APK** | [⬇ 最新版 APK 直链](https://github.com/C-silence/phycat-md-reader/releases/latest/download/phycat-md-reader-v0.1-debug.apk)（约 31MB，Android 7.0+，需允许"未知来源"） |
+| **版本记录** | 各版本与更新说明见 [Releases](https://github.com/C-silence/phycat-md-reader/releases) |
 | **在线体验** | [🌐 打开浏览器 Demo](./theme-preview/) —— 用真实 Markdown 预览 9 套主题渲染与换肤，效果与 App 阅读页一致 |
 
 ## ✨ 功能
@@ -48,7 +49,7 @@ export ANDROID_HOME=/path/to/Android/Sdk
 ├── README.md                 本说明 / GitHub Pages 首页
 ├── 项目文档.md                需求、技术决策、路线图（M0~M4）
 ├── 开发总结.md                续作/交接手册
-├── downloads/                可下载 APK（ASCII 文件名，站点直链）
+├── downloads/                本地 APK 暂存（不入库；对外分发走 GitHub Release）
 ├── phycat-*.css  (9 套)       配色主题（套用自 phycat，勿改）
 ├── phycat/                   基础样式 + 字体（勿拆散）
 ├── theme-preview/            ★ 阅读页唯一逻辑源（浏览器可直接打开 / Pages 在线 demo）

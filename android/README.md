@@ -6,7 +6,7 @@
 
 最新产物：
 - `app/build/outputs/apk/debug/app-debug.apk`
-- 项目根 `downloads/phycat-md-reader-v0.1-debug.apk`（ASCII 名，供站点直链下载，已签名可直接安装）
+- 本地暂存 `downloads/phycat-md-reader-v0.1-debug.apk`（不入库；对外分发走 GitHub Release：`gh release upload <tag> <该文件>`）
 
 ## 装到平板
 

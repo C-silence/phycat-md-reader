@@ -23,5 +23,6 @@ Thumbs.db
 # ===== 测试 / 临时 =====
 .playwright-mcp/
 
-# ===== 本地 APK（根目录中文名这份不入库；站点下载用 downloads/ 下 ASCII 名那份）=====
+# ===== 本地 APK（不入库；对外分发走 GitHub Release，见 README）=====
 /MD阅读器-v0.1-debug.apk
+downloads/*.apk
