@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>phycat 主题渲染预览 · 安卓 md 阅读器</title>
+<script src="vendor/markdown-it.min.js"></script>
+<style>
+  /* ========== 预览工具条（非主题，仅调试/原型用） ========== */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  :root {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --bar-bg: #26282b; --bar-fg: #e8e8e8; --bar-ctl: #3a3e44; --bar-ctl-h: #484d54;
+    --side-bg: #f7f6f3; --side-fg: #303234; --side-mut: #7a7d80;
+    --side-line: #e4e2de; --side-acc: #bf6a2f; --side-hover: #edeae4;
+    --acc-soft: rgba(191,106,47,.16); --acc-soft2: rgba(191,106,47,.11);
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body.dark-chrome {
+    --side-bg: #2b2e32; --side-fg: #dfe2e5; --side-mut: #8b9096;
+    --side-line: #3b3f44; --side-hover: #363a3f;
+  }
+
+  #bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 46px; z-index: 40;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px;
+    background: var(--bar-bg); color: var(--bar-fg);
+    border-bottom: 1px solid #000; box-shadow: 0 1px 6px rgba(0,0,0,.35);
+  }
+  #bar label { font-size: 12px; color: #9aa0a6; white-space: nowrap; }
+  #bar select, #bar button {
+    background: var(--bar-ctl); color: #fff; border: 1px solid #55595f;
+    border-radius: 6px; padding: 5px 10px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  #bar button:hover, #bar select:hover { background: var(--bar-ctl-h); }
+  #bar .spacer { flex: 1 1 auto; }
+  #state { font-size: 12px; color: #aeb4ba; min-width: 0; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+  #sideToggle { width: 34px; }
+
+  /* ========== 主布局：左(可折叠侧栏) + 右(阅读滚动区) ========== */
+  #app { display: flex; margin-top: 46px; height: calc(100vh - 46px); }
+  .paper-bg { flex: 1 1 auto; min-width: 0; background: #efece8; display:flex; }
+  #content { flex: 1 1 auto; min-width: 0; overflow-y: auto;
+             -webkit-overflow-scrolling: touch; }
+  #content::-webkit-scrollbar { width: 10px; }
+  #content::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 6px; }
+  #write { margin: 0 auto; }
+  #write h1, #write h2, #write h3, #write h4, #write h5, #write h6 { scroll-margin-top: 16px; }
+
+  /* ---------- 侧栏：顶 Tab + 内容区 + 底部当前文档 ---------- */
+  aside#side {
+    flex: 0 0 auto; width: 0; overflow: hidden;
+    background: var(--side-bg); color: var(--side-fg);
+    border-right: 1px solid var(--side-line);
+    transition: width .18s ease;
+    display: flex; flex-direction: column;
+  }
+  body.side-open aside#side { width: 320px; }
+
+  #sideTabs { flex: 0 0 auto; display: flex; border-bottom: 1px solid var(--side-line); }
+  #sideTabs .tab {
+    flex: 1 1 0; appearance: none; background: transparent; border: none;
+    padding: 10px 0 8px; font-size: 13px; color: var(--side-mut); cursor: pointer;
+    border-bottom: 2px solid transparent; letter-spacing: .5px;
+  }
+  #sideTabs .tab:hover { background: var(--side-hover); }
+  #sideTabs .tab.active { color: var(--side-fg); font-weight: 600;
+                          border-bottom-color: var(--side-acc); }
+
+  .pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pane[hidden] { display: none; }
+
+  /* 文件面板 */
+  #filesHead {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--side-line);
+    font-size: 12px; color: var(--side-mut);
+  }
+  .btn {
+    background: transparent; border: 1px solid var(--side-line); color: var(--side-fg);
+    border-radius: 6px; padding: 2px 8px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { background: var(--side-hover); }
+  #libWrap { overflow: auto; flex: 1 1 auto; min-height: 0; }
+  #lib { list-style: none; margin: 0; padding: 6px 8px 10px; font-size: 13px; }
+  #lib li { margin: 0; }
+  #lib ul { list-style: none; margin: 0; padding-left: 14px; }
+  #lib summary {
+    cursor: pointer; padding: 2px 4px; border-radius: 5px; user-select: none;
+    display: flex; align-items: center; gap: 4px; color: var(--side-fg);
+    font-weight: 500; font-size: 12.5px;
+  }
+  #lib summary:hover { background: var(--side-hover); }
+  #lib .fname {
+    cursor: pointer; padding: 3px 6px; border-radius: 5px; color: var(--side-fg);
+    display: flex; align-items: center; gap: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #lib .fname:hover { background: var(--side-hover); }
+  #lib .fname.active { background: var(--acc-soft); color: var(--side-acc); }
+  #lib .ico { flex: 0 0 auto; opacity: .75; }
+  #emptyLib { padding: 10px 12px; color: var(--side-mut); font-size: 12px; line-height: 1.6; }
+
+  /* 结构(大纲)面板 */
+  #outlineWrap { overflow: auto; flex: 1 1 auto; min-height: 0; padding-top: 4px; }
+  #outlineList { list-style: none; margin: 0; padding: 0 6px 10px; }
+  #outlineList li {
+    font-size: 13px; padding: 3px 6px; border-radius: 5px; cursor: pointer;
+    color: var(--side-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border-left: 2px solid transparent;
+  }
+  #outlineList li:hover { background: var(--side-hover); }
+  #outlineList li.l2 { padding-left: 16px; } #outlineList li.l3 { padding-left: 26px; }
+  #outlineList li.l4 { padding-left: 36px; } #outlineList li.l5 { padding-left: 46px; }
+  #outlineList li.l6 { padding-left: 56px; }
+  #outlineList li.act { background: var(--acc-soft2); border-left-color: var(--side-acc); color: var(--side-acc); }
+  #emptyOutline { padding: 10px 12px; color: var(--side-mut); font-size: 12px; }
+
+  /* 侧栏底部：当前文档 */
+  #sideFoot {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    border-top: 1px solid var(--side-line); padding: 7px 10px;
+    font-size: 12px; color: var(--side-mut); min-width: 0;
+  }
+  #sideFoot .d { flex: 1 1 auto; min-width: 0; overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; color: var(--side-fg); }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <button id="sideToggle" title="展开/收起侧边栏">☰</button>
+  <label for="themeSel">主题</label>
+  <select id="themeSel"></select>
+  <button id="prevBtn" title="上一个主题">‹</button>
+  <button id="nextBtn" title="下一个主题">›</button>
+  <span class="spacer"></span>
+  <button id="pickBtn">打开 md 文件…</button>
+  <button id="sampleBtn">恢复示例</button>
+  <span id="state"></span>
+</div>
+
+<div id="app">
+  <aside id="side">
+    <!-- 顶部两个导航 -->
+    <div id="sideTabs" role="tablist">
+      <button class="tab active" data-pane="files" role="tab" aria-selected="true">文件</button>
+      <button class="tab" data-pane="outline" role="tab" aria-selected="false">大纲</button>
+    </div>
+
+    <!-- 文件面板 -->
+    <div id="pane-files" class="pane">
+      <div id="filesHead">
+        <span id="libCount">0 篇</span>
+        <button class="btn" id="folderBtn" title="选择一个文件夹，列出其中所有 .md">选择文件夹…</button>
+      </div>
+      <div id="libWrap">
+        <ul id="lib"></ul>
+        <div id="emptyLib" hidden>还没有文件库。<br>点右上角「选择文件夹…」把存放 md 的目录加进来。</div>
+      </div>
+    </div>
+
+    <!-- 结构(大纲)面板 -->
+    <div id="pane-outline" class="pane" hidden>
+      <div id="outlineWrap">
+        <ul id="outlineList"></ul>
+        <div id="emptyOutline" hidden>当前文档没有标题（H1~H6）。</div>
+      </div>
+    </div>
+
+    <!-- 底部：当前文档 -->
+    <div id="sideFoot"><span>📄</span><span class="d" id="footName">—</span></div>
+  </aside>
+
+  <div class="paper-bg">
+    <main id="content">
+      <div id="write"></div>
+    </main>
+  </div>
+</div>
+
+<!-- 主题样式：JS 切换此 <link> 的 href 即换肤（沿 @import 拉基础样式与字体） -->
+<link id="themeCss" rel="stylesheet" href="../phycat-caramel.css">
+
+<!-- ===== 查看器 override：任务清单复选框 =====
+     phycat 基础样式按 Typora 结构写任务列表；但 markdown-it 紧凑列表不包 <p>，
+     正文贴着 <li> 左缘 → 主题绝对定位的圆圈会压到首字，且原 checkbox 被 disabled
+     无法勾选、明暗两套主题的 task 样式还不一致。
+     这里统一覆盖：
+       · li 去掉原生 ●（list-style:none）
+       · 圆圈 = checkbox 自身（hit 区与可见圆重合，可点击勾选）
+       · 位置放进左侧符号槽、垂直对齐首行
+       · 勾选后圆圈填充主题色、正文划线删除 -->
+<style id="taskOverride">
+  #write li.task-list-item { position: relative; list-style: none; }
+  #write li.task-list-item > input[type="checkbox"].task-check {
+    -webkit-appearance: none; appearance: none;
+    display: block; margin: 0; padding: 0; z-index: 1;
+    position: absolute; top: .65em; left: -1.7em;
+    width: 1.3em; height: 1.3em;
+    border: 1.5px solid var(--element-color-deep, #9aa0a6);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer; outline: none;
+  }
+  #write li.task-list-item > input[type="checkbox"].task-check:focus-visible {
+    box-shadow: 0 0 0 3px rgba(0,0,0,.15);
+  }
+  #write li.task-list-item > input[type="checkbox"].task-check::before { content: none; }
+  #write li.task-list-item > input[type="checkbox"].task-check::after {
+    content: '';
+    position: absolute;
+    left: .4em; top: .14em;
+    width: .3em; height: .55em;
+    border: solid #fff;
+    border-width: 0 .15em .15em 0;
+    transform: rotate(45deg);
+    opacity: 0;
+    transition: opacity .12s ease;
+  }
+  #write li.task-list-item > input[type="checkbox"].task-check:checked {
+    background: var(--element-color, #e0a04a);
+    border-color: var(--element-color, #e0a04a);
+  }
+  #write li.task-list-item > input[type="checkbox"].task-check:checked::after { opacity: 1; }
+  /* 正文划线：勾选后划掉该段（深浅主题通用） */
+  #write li.task-list-item > .task-content,
+  #write li.task-list-item > p > .task-content {
+    position: relative; display: inline;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 55%;
+    background-size: 0% 1.5px;
+    transition: background-size .4s ease, color .4s ease;
+  }
+  #write li.task-list-item > input[type="checkbox"].task-check:checked + .task-content,
+  #write li.task-list-item > input[type="checkbox"].task-check:checked + p > .task-content {
+    color: #bbb;
+    background-size: 100% 1.5px;
+  }
+</style>
+
+<!-- ===== 内嵌示例文档（与 sample.md 内容一致）。注意：文档内不能出现 "</script>" ===== -->
+<script type="text/markdown" id="sampleMd">
+---
+title: 安卓 Markdown 阅读器 · 渲染样例
+tags: [typora, theme, preview]
+date: 2026-09-06
+---
+
+# 让排版回到 Typora
+
+> 这篇样例用来检验 **phycat 主题** 在「纯查看」场景下的还原度。
+> 下面的每种元素都是 Markdown 里最常用的那部分。
+
+## 文字与强调
+
+正文段落——这一段用于观察**行高、字距、正文字色**。它含有*斜体*、~~删除线~~、`行内代码`，以及一个[链接](https://github.com)。汉字与英文混排也会出现，用来检验 HarmonyOS Sans / 思源宋体与 Cascadia 的搭配效果：Markdown 0.5 alpha。
+
+### 三级标题
+
+三级及以下标题会带小图标与自动编号，注意标题编号与图标的显示效果。
+
+#### 四级标题
+
+#### 四级标题（再次出现，验证编号递增）
+
+## 列表
+
+有序列表与任务清单都演示一下：
+
+1. 第一步：把 App 装到平板上
+2. 第二步：导入 md 文件
+3. 第三步：切换主题
+
+- 无序项 A
+- 无序项 B
+  - 嵌套项 B1
+  - 嵌套项 B2
+
+任务清单（Typora 风格的复选框）：
+
+- [x] 已通读这份文档
+- [ ] 把文档导入平板
+- [ ] 挑一套喜欢的主题
+
+## 引用
+
+> 好的引用是正文的留白。这一段用来检验引用块的
+> 边框、底色与内边距是否与原主题一致。
+
+## 表格
+
+| 主题名   | 基调       | 说明                       |
+| -------- | ---------- | -------------------------- |
+| Caramel  | 焦糖暖橙   | 温暖，阅读友好             |
+| Prussian | 普鲁士蓝   | 沉稳，适合技术文档         |
+| Dark     | 夜间暗色   | 暗光环境、更省电           |
+
+## 代码块
+
+```kotlin
+data class Book(
+    val title: String,
+    val theme: String = "phycat-caramel",
+)
+
+fun main() {
+    println("Hello, Typora reader!")
+}
+```
+
+没有标注语言的代码块也能正常显示：
+
+```
+这一段没有指定语言。
+```
+
+渲染时会被包进带 `md-fences` 类的 `<pre>`，代码用 Cascadia Code 显示。
+
+## 图片
+
+开启 HTML 透传后，下面这张**内嵌 SVG**（data URI）在离线时也能显示：
+
+<img src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='92'%3E%3Crect width='520' height='92' rx='10' fill='%23f4e3d3'/%3E%3Ctext x='18' y='54' font-family='sans-serif' font-size='21' fill='%23553a25'%3Einline SVG via data URI - works offline%3C/text%3E%3C/svg%3E" style="max-width:100%">
+
+## 分隔线
+
+---
+
+到这里，样例覆盖了：标题层级与自动编号、正文、强调、行内/块级代码、引用、有序/无序列表、任务清单、表格、图片。
+
+想用你自己的文档测试？点顶部工具栏的 **打开 md 文件…**，或用侧边栏「文件」页的 **选择文件夹…** 建立文库。
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 渲染引擎与主题 ---------- */
+  var md = window.markdownit({ html: true, linkify: true, breaks: false });
+  var writeEl = document.getElementById('write');
+  var contentEl = document.getElementById('content');
+
+  var THEMES = [
+    { file: '../phycat-caramel.css',  name: 'Caramel 焦糖橙',   outer: '#f1ece4', dark: false },
+    { file: '../phycat-cherry.css',   name: 'Cherry 樱桃红',   outer: '#f3ebec', dark: false },
+    { file: '../phycat-forest.css',   name: 'Forest 森林绿',   outer: '#eaf0e6', dark: false },
+    { file: '../phycat-mauve.css',    name: 'Mauve 暮光紫',    outer: '#efeaf1', dark: false },
+    { file: '../phycat-mint.css',     name: 'Mint 薄荷青',     outer: '#e6f0ec', dark: false },
+    { file: '../phycat-prussian.css', name: 'Prussian 普鲁士蓝', outer: '#e7edf2', dark: false },
+    { file: '../phycat-sakura.css',   name: 'Sakura 樱花粉',   outer: '#f5ecef', dark: false },
+    { file: '../phycat-sky.css',      name: 'Sky 晴空蓝',      outer: '#e8f0f5', dark: false },
+    { file: '../phycat-dark.css',     name: 'Dark 夜间',       outer: '#202124', dark: true  }
+  ];
+
+  var el = {};
+  ['themeSel','prevBtn','nextBtn','sideToggle','pickBtn','sampleBtn','state',
+   'sideTabs','folderBtn','lib','libWrap','libCount','emptyLib',
+   'outlineList','outlineWrap','emptyOutline','footName']
+    .forEach(function (id) { el[id] = document.getElementById(id); });
+
+  /* ---------- 文档库（内存版书架） ---------- */
+  var docs = {};          // key -> { key, name, path, text, builtin }
+  var order = [];         // 显示顺序：内置示例在前
+  var activeKey = null;
+  var taskChecks = {};       // docKey -> 该文档每个任务项的最终勾选布尔值（本次运行内记住）
+  var builtinSample = {
+    key: 'builtin:sample', name: '示例 sample.md', path: '内置示例',
+    text: document.getElementById('sampleMd').textContent.replace(/^\s+/, '').replace(/\s+$/, ''),
+    builtin: true
+  };
+
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function isMd(name) { return /\.(md|markdown)$/i.test(name); }
+
+  /* ---------- Markdown → Typora HTML（fidelity shim） ---------- */
+  function render(text) {
+    var html = '';
+    var m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
+    if (m) { html += '<pre class="md-meta-block">' + esc(m[1]) + '</pre>'; text = text.slice(m[0].length); }
+    return html + md.render(text);
+  }
+  /* ---------- 任务清单 ----------
+     markdown-it 的 `- [ ] xxx` 就是普通列表项，这里把它转成
+       <li class="task-list-item"><input type="checkbox" class="task-check">…</li>
+     并把剩余正文包进 <span class="task-content">（划线样式的作用点），
+     checkbox 可点击；勾选状态按文档记在 taskChecks，本次运行内重开同一文档仍保留。 */
+  function fixTasks(root) {
+    var lis = root.querySelectorAll('li');
+    var stored = taskChecks[activeKey] || null;
+    var idx = 0;
+    for (var i = 0; i < lis.length; i++) {
+      var li = lis[i];
+      // 正文宿主：宽松列表内容在 <p>/<span> 里，紧凑列表直接在 <li>
+      var host = null;
+      for (var c = 0; c < li.children.length; c++) {
+        var tag = li.children[c].tagName;
+        if (tag === 'P' || tag === 'SPAN') { host = li.children[c]; break; }
+      }
+      if (!host) host = li;
+      var node = host.firstChild;
+      if (!node || node.nodeType !== 3) continue;
+      var m = /^\s*\[([ xX])\]\s+/.exec(node.nodeValue);
+      if (!m) continue;
+      node.nodeValue = node.nodeValue.replace(/^\s*\[([ xX])\]\s+/, '');
+
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'task-check';
+      cb.checked = (m[1].toLowerCase() === 'x');
+      if (stored && idx < stored.length && typeof stored[idx] === 'boolean') {
+        cb.checked = stored[idx];
+      }
+      li.classList.add('task-list-item');
+
+      // 把该段正文收进 <span class="task-content">；遇到嵌套的 ul/ol/pre 等块级就停下，
+      // 让它们作为 <span> 之后的兄弟节点保留（子列表不被包进 span）
+      var wrap = document.createElement('span');
+      wrap.className = 'task-content';
+      var child;
+      while ((child = host.firstChild)) {
+        if (host === li && child.nodeType === 1
+            && /^(UL|OL|PRE|BLOCKQUOTE|TABLE|HR|P)$/.test(child.tagName)) break;
+        wrap.appendChild(child);
+      }
+      host.insertBefore(wrap, host.firstChild);
+      li.insertBefore(cb, host === li ? wrap : host);
+
+      (function (docKey, ci, box) {
+        box.addEventListener('change', function () {
+          var arr = taskChecks[docKey] = taskChecks[docKey] || [];
+          arr[ci] = box.checked;
+        });
+      })(activeKey, idx, cb);
+      idx++;
+    }
+  }
+  function decorate(root) {
+    var hs = root.querySelectorAll('h1,h2,h3,h4,h5,h6');
+    for (var i = 0; i < hs.length; i++) hs[i].classList.add('md-heading');
+    var pres = root.querySelectorAll('pre');
+    for (var j = 0; j < pres.length; j++) pres[j].classList.add('md-fences');
+    fixTasks(root);
+  }
+
+  /* ---------- 打开并渲染一份文档 ---------- */
+  function openDoc(key) {
+    var d = docs[key]; if (!d) return;
+    activeKey = key;
+    writeEl.innerHTML = render(d.text);
+    decorate(writeEl);
+    contentEl.scrollTop = 0;
+    buildOutline();
+    renderLib();
+    updateState();
+  }
+
+  /* ---------- 大纲 ---------- */
+  var headingEls = [];
+  function buildOutline() {
+    var ul = el.outlineList; ul.innerHTML = '';
+    headingEls = Array.prototype.slice.call(writeEl.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+    var has = headingEls.length > 0;
+    el.emptyOutline.hidden = has;
+    el.outlineWrap.style.display = has ? 'block' : 'none';
+    el.outlineList.hidden = !has;
+    headingEls.forEach(function (h) {
+      var level = parseInt(h.tagName.charAt(1), 10);
+      var li = document.createElement('li');
+      li.className = 'l' + level;
+      li.textContent = h.textContent.trim() || '(空标题)';
+      li.title = h.textContent.trim();
+      li.addEventListener('click', function () {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      ul.appendChild(li);
+    });
+  }
+
+  var scrollRaf = null;
+  function onScroll() {
+    if (scrollRaf) return;
+    scrollRaf = requestAnimationFrame(function () {
+      scrollRaf = null;
+      var top = contentEl.scrollTop + 12;
+      var idx = -1;
+      for (var i = 0; i < headingEls.length; i++) {
+        var y = headingEls[i].getBoundingClientRect().top - contentEl.getBoundingClientRect().top + contentEl.scrollTop;
+        if (y <= top) idx = i; else break;
+      }
+      var lis = el.outlineList.children;
+      for (var k = 0; k < lis.length; k++) lis[k].classList.toggle('act', k === idx);
+    });
+  }
+  contentEl.addEventListener('scroll', onScroll, { passive: true });
+
+  /* ---------- 文件库 UI ---------- */
+  function registerDoc(doc, prepend) {
+    if (docs[doc.key]) { docs[doc.key].text = doc.text; return; }
+    docs[doc.key] = doc;
+    if (prepend) order.unshift(doc.key); else order.push(doc.key);
+  }
+  function renderLib() {
+    el.lib.innerHTML = '';
+    var empty = Object.keys(docs).length === 0;
+    el.emptyLib.hidden = !empty;
+    el.lib.hidden = empty;
+    el.libCount.textContent = Object.keys(docs).length + ' 篇';
+    if (empty) return;
+    var groupBy = {};
+    order.forEach(function (k) {
+      var d = docs[k];
+      var g = d.path || '文档';
+      (groupBy[g] = groupBy[g] || []).push(d);
+    });
+    Object.keys(groupBy).sort().forEach(function (g) {
+      var li = document.createElement('li');
+      var dt = document.createElement('details');
+      dt.open = true;
+      var sm = document.createElement('summary');
+      sm.textContent = g;
+      dt.appendChild(sm);
+      var inner = document.createElement('ul');
+      groupBy[g].forEach(function (d) {
+        var it = document.createElement('li');
+        var f = document.createElement('div');
+        f.className = 'fname'; f.dataset.key = d.key;
+        f.innerHTML = '<span class="ico">📄</span><span></span>';
+        f.querySelector('span:last-child').textContent = d.name;
+        f.addEventListener('click', function () { openDoc(d.key); });
+        it.appendChild(f);
+        inner.appendChild(it);
+      });
+      dt.appendChild(inner);
+      li.appendChild(dt);
+      el.lib.appendChild(li);
+    });
+    // 高亮当前文档
+    el.lib.querySelectorAll('.fname').forEach(function (n) {
+      n.classList.toggle('active', n.dataset.key === activeKey);
+    });
+  }
+
+  /* ---------- 侧栏 Tab ---------- */
+  function setTab(pane) {
+    el.sideTabs.querySelectorAll('.tab').forEach(function (b) {
+      var on = b.dataset.pane === pane;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    ['files', 'outline'].forEach(function (p) {
+      document.getElementById('pane-' + p).hidden = (p !== pane);
+    });
+    try { localStorage.setItem('sideTab', pane); } catch (e) {}
+  }
+  el.sideTabs.addEventListener('click', function (e) {
+    var b = e.target.closest('.tab'); if (b) setTab(b.dataset.pane);
+  });
+
+  /* ---------- 主题 ---------- */
+  function currentIndex() { return parseInt(el.themeSel.value, 10) || 0; }
+
+  /* hex → [r,g,b]，支持 #rgb 与 #rrggbb */
+  function hexToRgb(hex) {
+    var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return null;
+    var s = m[1];
+    if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+  }
+
+  /* 让侧栏强调色跟随当前主题：读取主题在 :root 定义的主色并换算成高亮底色 */
+  function applyAccent() {
+    var cs = getComputedStyle(document.documentElement);
+    var acc = cs.getPropertyValue('--element-color').trim()
+           || cs.getPropertyValue('--head-title-color').trim()
+           || '';
+    var t = THEMES[currentIndex()];
+    if (!acc) acc = t.dark ? '#e2945c' : '#bf6a2f';
+    var rgb = hexToRgb(acc) || [191, 106, 47];
+    var root = document.documentElement.style;
+    root.setProperty('--side-acc', acc);
+    root.setProperty('--acc-soft',  'rgba(' + rgb.join(',') + ',0.16)');
+    root.setProperty('--acc-soft2', 'rgba(' + rgb.join(',') + ',0.11)');
+  }
+
+  function setTheme(i) {
+    i = (i + THEMES.length) % THEMES.length;
+    el.themeSel.value = i;
+    var t = THEMES[i];
+    var link = document.getElementById('themeCss');
+    link.onload = applyAccent;   // 新主题 css 加载完成后按它重算强调色
+    link.href = t.file;
+    document.querySelector('.paper-bg').style.background = t.outer;
+    document.body.classList.toggle('dark-chrome', t.dark);
+    applyAccent();               // 先按（可能还是旧的）值套一次，避免跳色
+    updateState();
+  }
+
+  function updateState() {
+    var d = docs[activeKey];
+    el.footName.textContent = d ? d.name : '—';
+    var t = THEMES[currentIndex()];
+    var chars = writeEl.textContent ? writeEl.textContent.length : 0;
+    el.state.textContent = t.name + ' · ' + (d ? d.name : '') + ' · 约 ' + chars + ' 字';
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  el.sideToggle.addEventListener('click', function () {
+    document.body.classList.toggle('side-open');
+    try { localStorage.setItem('sideOpen', document.body.classList.contains('side-open') ? '1' : '0'); } catch (e) {}
+  });
+
+  THEMES.forEach(function (t, i) {
+    var o = document.createElement('option');
+    o.value = i; o.textContent = t.name + (t.dark ? ' (暗)' : '');
+    el.themeSel.appendChild(o);
+  });
+  el.themeSel.addEventListener('change', function () { setTheme(parseInt(el.themeSel.value, 10)); });
+  el.prevBtn.addEventListener('click', function () { setTheme(currentIndex() - 1); });
+  el.nextBtn.addEventListener('click', function () { setTheme(currentIndex() + 1); });
+
+  el.sampleBtn.addEventListener('click', function () { openDoc(builtinSample.key); });
+
+  // 「打开 md 文件」：单个文档加入文件库
+  var fileInput = document.createElement('input');
+  fileInput.type = 'file'; fileInput.accept = '.md,.markdown,text/markdown,text/plain'; fileInput.hidden = true;
+  document.body.appendChild(fileInput);
+  el.pickBtn.addEventListener('click', function () {
+    // 安卓壳里交给原生 SAF 选文件；桌面浏览器回退到本地 input
+    if (window.AndroidBridge && window.AndroidBridge.pickFile) { window.AndroidBridge.pickFile(); return; }
+    fileInput.click();
+  });
+  fileInput.addEventListener('change', function () {
+    var f = fileInput.files && fileInput.files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      registerDoc({ key: 'file:' + f.name, name: f.name, path: '本次打开', text: String(r.result || '') });
+      buildOpenUpdate('file:' + f.name);
+    };
+    r.readAsText(f, 'utf-8');
+    fileInput.value = '';
+  });
+
+  // 「选择文件夹」：webkitdirectory 枚举该目录下所有 .md
+  var dirInput = document.createElement('input');
+  dirInput.type = 'file'; dirInput.webkitdirectory = true; dirInput.hidden = true;
+  document.body.appendChild(dirInput);
+  el.folderBtn.addEventListener('click', function () {
+    // 安卓壳里交给原生 SAF 选目录；桌面浏览器回退到本地 input
+    if (window.AndroidBridge && window.AndroidBridge.pickFolder) { window.AndroidBridge.pickFolder(); return; }
+    dirInput.click();
+  });
+  dirInput.addEventListener('change', function () {
+    var mdFiles = Array.prototype.slice.call(dirInput.files).filter(function (f) { return isMd(f.name); });
+    if (mdFiles.length === 0) { alert('该文件夹下没有 .md 文件'); return; }
+    var pending = mdFiles.length, firstKey = null;
+    mdFiles.forEach(function (f) {
+      var rel = f.webkitRelativePath || f.name;
+      var key = 'lib:' + rel;
+      var r = new FileReader();
+      r.onload = (function (rel, key) {
+        return function () {
+          var parts = rel.split('/');
+          registerDoc({
+            key: key,
+            name: parts[parts.length - 1],
+            path: parts.slice(0, -1).join('/') || '根目录',
+            text: String(r.result || '')
+          });
+          if (!firstKey) firstKey = key;
+          if (--pending === 0) buildOpenUpdate(firstKey);
+        };
+      })(rel, key);
+      r.readAsText(f, 'utf-8');
+    });
+    dirInput.value = '';
+  });
+
+  function buildOpenUpdate(key) {
+    registerDoc(builtinSample);   // 确保示例始终在库中（重复注册会被忽略）
+    openDoc(key || builtinSample.key);  // openDoc 内部会重建文件列表并高亮
+  }
+
+  /* ---------- 原生注入接口（供安卓 WebView 壳调用） ---------- */
+  function addExternalBatch(list) {
+    if (!list || !list.length) return;
+    var firstKey = null;
+    list.forEach(function (f) {
+      var name = String(f.name || '未命名.md');
+      var path = String(f.path || '外部文档');
+      var text = String(f.text || '');
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      var key = 'ext:' + path + '/' + name;
+      registerDoc({ key: key, name: name, path: path, text: text });
+      if (!firstKey) firstKey = key;
+    });
+    renderLib();
+    if (firstKey) openDoc(firstKey);
+  }
+  window.mdReader = { addFiles: function (list) { addExternalBatch(list); } };
+
+  /* ---------- 启动 ---------- */
+  registerDoc(builtinSample, true);
+  renderLib();
+  try {
+    if (localStorage.getItem('sideOpen') === '1') document.body.classList.add('side-open');
+    setTab(localStorage.getItem('sideTab') || 'files');
+  } catch (e) { setTab('files'); }
+  setTheme(0);
+  openDoc(builtinSample.key);
+})();
+</script>
+</body>
+</html>

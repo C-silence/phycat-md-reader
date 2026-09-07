@@ -1,0 +1,27 @@
+# ===== Android 构建产物 =====
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+*.apk.idsig
+
+# ===== 本机路径（换机后按 README 指向自己的 SDK）=====
+android/local.properties
+
+# ===== 由 tools/sync_assets.py 生成的网页资源（内含 ~40MB 字体副本，勿提交）=====
+# 构建前先执行：cd android && python tools/sync_assets.py
+android/app/src/main/assets/app/
+
+# ===== IDE / 系统 =====
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ===== 测试 / 临时 =====
+.playwright-mcp/
+
+# ===== 本地 APK（根目录中文名这份不入库；站点下载用 downloads/ 下 ASCII 名那份）=====
+/MD阅读器-v0.1-debug.apk
