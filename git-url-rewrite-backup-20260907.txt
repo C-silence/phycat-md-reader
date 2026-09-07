@@ -1,4 +1,0 @@
-[backup] 2026-09-07 从 ~/.gitconfig 移除
-url.https://gh-proxy.com/https://github.com/.insteadof 值: https://github.com/
-如需恢复执行:
-git config --global url.https://gh-proxy.com/https://github.com/.insteadof https://github.com/
